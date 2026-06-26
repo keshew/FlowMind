@@ -6,6 +6,9 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
+            Color.cfBg
+                .ignoresSafeArea()
+
             if showSplash {
                 SplashView(isVisible: $showSplash)
                     .transition(.identity)
@@ -23,5 +26,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.4), value: showSplash)
         .animation(.easeInOut(duration: 0.4), value: appState.hasCompletedOnboarding)
         .animation(.easeInOut(duration: 0.4), value: appState.hasCompletedSetup)
+        .navigationViewStyle(.stack)
+        .background(Color.cfBg.ignoresSafeArea())
     }
 }

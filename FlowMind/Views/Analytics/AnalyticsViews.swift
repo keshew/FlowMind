@@ -45,6 +45,9 @@ struct AnalyticsView: View {
                         default: ProductivityView()
                         }
                     }
+                    .safeAreaInset(edge: .bottom) {
+                        Color.clear.frame(height: 116)
+                    }
                 }
             }
             .navigationBarHidden(true)
@@ -58,84 +61,125 @@ struct ProductivityView: View {
 
     var weekStats: [DayStats] { taskStore.last7DaysStats() }
     var overallRate: Double { taskStore.completionRate(last: 7) }
+    private let summaryColumns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
 
     var body: some View {
         VStack(spacing: 16) {
             // Overall rate
-            CFCard {
-                VStack(spacing: 12) {
-                    Text("7-Day Completion Rate")
-                        .font(.cfHeadline())
-                        .foregroundColor(.cfText)
+            CFCard(padding: 18) {
+                HStack(spacing: 18) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("7-Day Completion")
+                            .font(.cfHeadline())
+                            .foregroundColor(.cfText)
+                        Text("Last 7 days")
+                            .font(.cfCaption())
+                            .foregroundColor(.cfTextSecondary)
+                        Text("\(completedTotal) of \(taskTotal) done")
+                            .font(.cfCaption())
+                            .foregroundColor(.cfTextSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     ZStack {
                         Circle()
                             .stroke(Color.cfCardLight, lineWidth: 12)
-                            .frame(width: 120, height: 120)
+                            .frame(width: 104, height: 104)
                         Circle()
                             .trim(from: 0, to: overallRate)
                             .stroke(
                                 LinearGradient.cfSuccessGradient,
                                 style: StrokeStyle(lineWidth: 12, lineCap: .round)
                             )
-                            .frame(width: 120, height: 120)
+                            .frame(width: 104, height: 104)
                             .rotationEffect(.degrees(-90))
                             .animation(.spring(response: 0.6, dampingFraction: 0.7), value: overallRate)
 
                         Text("\(Int(overallRate * 100))%")
-                            .font(.cfDisplay(28))
+                            .font(.cfDisplay(26))
                             .foregroundColor(.cfText)
                     }
                 }
+                .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 18)
 
             // Bar chart
-            CFCard {
+            CFCard(padding: 18) {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Daily Completion")
                         .font(.cfHeadline())
                         .foregroundColor(.cfText)
 
-                    HStack(alignment: .bottom, spacing: 8) {
-                        ForEach(weekStats) { stat in
-                            VStack(spacing: 6) {
+                    GeometryReader { geo in
+                        let barWidth = max(22, (geo.size.width - 72) / 7)
+                        HStack(alignment: .bottom, spacing: 12) {
+                            ForEach(weekStats) { stat in
                                 let rate = stat.totalTasks > 0 ? Double(stat.completedTasks) / Double(stat.totalTasks) : 0
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(LinearGradient.cfSuccessGradient)
-                                    .frame(width: 32, height: max(4, 100 * rate))
-                                    .animation(.spring(response: 0.4, dampingFraction: 0.7), value: rate)
-                                Text(dayLabel(stat.date))
-                                    .font(.cfCaption(10))
-                                    .foregroundColor(.cfTextSecondary)
+                                VStack(spacing: 8) {
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .fill(barColor(for: stat, rate: rate))
+                                        .frame(width: barWidth, height: barHeight(for: stat, rate: rate))
+                                        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: rate)
+                                    Text(dayLabel(stat.date))
+                                        .font(.cfCaption(10))
+                                        .foregroundColor(.cfTextSecondary)
+                                        .frame(width: barWidth)
+                                }
                             }
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     }
-                    .frame(height: 130)
+                    .frame(height: 132)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 18)
 
             // Summary stats
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                let total7 = weekStats.reduce(0) { $0 + $1.totalTasks }
-                let done7 = weekStats.reduce(0) { $0 + $1.completedTasks }
-                let missed7 = weekStats.reduce(0) { $0 + $1.missedTasks }
-
-                StatCard(title: "Total Tasks", value: "\(total7)", icon: "list.bullet", color: .cfPrimary)
-                StatCard(title: "Completed", value: "\(done7)", icon: "checkmark.circle.fill", color: .cfSuccess)
-                StatCard(title: "Missed", value: "\(missed7)", icon: "exclamationmark.circle", color: .cfAlert)
+            LazyVGrid(columns: summaryColumns, spacing: 12) {
+                StatCard(title: "Total Tasks", value: "\(taskTotal)", icon: "list.bullet", color: .cfPrimary)
+                StatCard(title: "Completed", value: "\(completedTotal)", icon: "checkmark.circle.fill", color: .cfSuccess)
+                StatCard(title: "Missed", value: "\(missedTotal)", icon: "exclamationmark.circle", color: .cfAlert)
                 StatCard(title: "Streak", value: streakDays(), icon: "flame.fill", color: .cfSecondary)
             }
             .padding(.horizontal, 18)
 
-            Spacer(minLength: 100)
+            Spacer(minLength: 16)
         }
+        .padding(.top, 4)
+    }
+
+    private var taskTotal: Int {
+        weekStats.reduce(0) { $0 + $1.totalTasks }
+    }
+
+    private var completedTotal: Int {
+        weekStats.reduce(0) { $0 + $1.completedTasks }
+    }
+
+    private var missedTotal: Int {
+        weekStats.reduce(0) { $0 + $1.missedTasks }
     }
 
     private func dayLabel(_ date: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "EEE"
         return f.string(from: date)
+    }
+
+    private func barHeight(for stat: DayStats, rate: Double) -> CGFloat {
+        guard stat.totalTasks > 0 else { return 10 }
+        return max(12, CGFloat(rate) * 108)
+    }
+
+    private func barColor(for stat: DayStats, rate: Double) -> Color {
+        guard stat.totalTasks > 0 else { return .cfCardLight }
+        if rate == 0 { return .cfAlert }
+        if rate < 0.5 { return .cfAccent }
+        return .cfSuccess
     }
 
     private func streakDays() -> String {
@@ -170,7 +214,9 @@ struct StatCard: View {
                     .font(.cfCaption())
                     .foregroundColor(.cfTextSecondary)
             }
+            .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

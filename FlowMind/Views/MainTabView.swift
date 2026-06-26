@@ -26,6 +26,7 @@ struct MainTabView: View {
             CFTabBar(selectedTab: $selectedTab)
         }
         .ignoresSafeArea(.keyboard)
+        .background(Color.cfBg.ignoresSafeArea())
         .onAppear {
             taskStore.generateTasks(for: Date(), from: routineStore.routines)
         }
